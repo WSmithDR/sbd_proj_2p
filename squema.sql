@@ -1,3 +1,6 @@
+-- Eliminar la base de datos si existe (para reiniciar en caso de errores)
+-- DROP DATABASE IF EXISTS familysearch;
+
 -- Creación de la base de datos para el árbol genealógico
 CREATE DATABASE IF NOT EXISTS familysearch;
 USE familysearch;
@@ -152,6 +155,37 @@ CREATE TABLE Mensajes (
     FOREIGN KEY (ID_Destinatario) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE
 );
 
+-- Tabla de Amistades entre Usuarios
+-- Almacena las relaciones de amistad entre usuarios
+-- Se asegura que ID_Usuario1 sea siempre menor que ID_Usuario2 para evitar duplicados
+CREATE TABLE Amistades (
+    ID_Amistad INT AUTO_INCREMENT PRIMARY KEY,
+    ID_Usuario1 INT NOT NULL COMMENT 'Usuario con ID menor',
+    ID_Usuario2 INT NOT NULL COMMENT 'Usuario con ID mayor',
+    Fecha_Amistad TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha de creación de la solicitud',
+    Estado ENUM('pendiente', 'aceptada', 'rechazada') DEFAULT 'pendiente' COMMENT 'Estado de la amistad',
+    Fecha_Estado TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP COMMENT 'Última actualización del estado',
+    FOREIGN KEY (ID_Usuario1) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE,
+    FOREIGN KEY (ID_Usuario2) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE,
+    UNIQUE KEY uk_amistad_usuarios (ID_Usuario1, ID_Usuario2),
+    CHECK (ID_Usuario1 < ID_Usuario2)
+) COMMENT='Almacena las relaciones de amistad entre usuarios';
+
+-- Trigger para asegurar que ID_Usuario1 siempre sea menor que ID_Usuario2
+-- Esto simplifica las consultas y evita duplicados
+DELIMITER //
+CREATE TRIGGER before_insert_amistades
+BEFORE INSERT ON Amistades
+FOR EACH ROW
+BEGIN
+    IF NEW.ID_Usuario1 > NEW.ID_Usuario2 THEN
+        SET @temp = NEW.ID_Usuario1;
+        SET NEW.ID_Usuario1 = NEW.ID_Usuario2;
+        SET NEW.ID_Usuario2 = @temp;
+    END IF;
+END //
+DELIMITER ;
+
 -- Tabla de Historial de Cambios
 CREATE TABLE Historial_Cambios (
     ID_Cambio INT AUTO_INCREMENT PRIMARY KEY,
@@ -183,27 +217,46 @@ CREATE TABLE Fusiones (
     FOREIGN KEY (ID_Usuario) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE
 );
 
--- Índices para mejorar el rendimiento de las consultas
--- Tabla de Amistades entre Usuarios
-CREATE TABLE Amistades (
-    ID_Amistad INT AUTO_INCREMENT PRIMARY KEY,
-    ID_Usuario1 INT NOT NULL,
-    ID_Usuario2 INT NOT NULL,
-    Fecha_Amistad TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    Estado ENUM('pendiente', 'aceptada', 'rechazada') DEFAULT 'pendiente',
-    Fecha_Estado TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_amistad (LEAST(ID_Usuario1, ID_Usuario2), GREATEST(ID_Usuario1, ID_Usuario2)),
-    FOREIGN KEY (ID_Usuario1) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE,
-    FOREIGN KEY (ID_Usuario2) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE,
-    CHECK (ID_Usuario1 != ID_Usuario2)
-);
+-- ============================================
+-- ÍNDICES PARA MEJORAR EL RENDIMIENTO
+-- ============================================
 
--- Índices para mejorar el rendimiento de las consultas
+-- Índice para búsquedas por nombre y apellido en Personas
+-- Útil para búsquedas de antepasados por nombre
 CREATE INDEX idx_personas_nombre_apellido ON Personas(Nombres, Apellidos);
+
+-- Índice para búsquedas por fechas de nacimiento y defunción
+-- Acelera consultas de rango de fechas de vida
 CREATE INDEX idx_personas_fechas ON Personas(Fecha_Nacimiento, Fecha_Defuncion);
-CREATE INDEX idx_usuarios_email ON Usuarios(Email);
+
+-- Índice único para búsqueda de usuarios por email
+-- Acelera el proceso de login y verificación de cuentas
+CREATE UNIQUE INDEX idx_usuarios_email ON Usuarios(Email);
+
+-- Índice para búsqueda de registros por título
+-- Útil para encontrar documentos históricos específicos
 CREATE INDEX idx_registros_titulo ON Registros_Historicos(Titulo);
+
+-- Índice compuesto para búsquedas por tipo de documento y fecha
+-- Mejora el rendimiento en filtros combinados
 CREATE INDEX idx_registros_tipo_fecha ON Registros_Historicos(Tipo_Documento, Fecha_Documento);
+
+-- Índice para búsqueda de recuerdos por tipo y fecha
+-- Facilita la organización de archivos multimedia
 CREATE INDEX idx_recuerdos_tipo_fecha ON Recuerdos(Tipo_Archivo, Fecha_Subida);
+
+-- Índice para búsqueda de amistades por estado
+-- Acelera consultas de solicitudes pendientes
 CREATE INDEX idx_amistades_estado ON Amistades(Estado, Fecha_Estado);
-CREATE INDEX idx_amistades_usuarios ON Amistades(LEAST(ID_Usuario1, ID_Usuario2), GREATEST(ID_Usuario1, ID_Usuario2));
+
+-- Índice para búsqueda de mensajes por fecha
+-- Mejora el rendimiento al cargar conversaciones
+CREATE INDEX idx_mensajes_fecha ON Mensajes(Fecha_Envio);
+
+-- Índice para búsqueda en el historial de cambios
+-- Acelera la auditoría de cambios en el sistema
+CREATE INDEX idx_historial_fecha ON Historial_Cambios(Fecha_Cambio);
+
+-- Índice para búsqueda de tareas de indexación por estado
+-- Mejora el rendimiento en el seguimiento de tareas
+CREATE INDEX idx_tareas_estado ON Tareas_Indexacion(Estado, Fecha_Asignacion);
