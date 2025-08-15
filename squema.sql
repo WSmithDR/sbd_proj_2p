@@ -184,9 +184,26 @@ CREATE TABLE Fusiones (
 );
 
 -- Índices para mejorar el rendimiento de las consultas
+-- Tabla de Amistades entre Usuarios
+CREATE TABLE Amistades (
+    ID_Amistad INT AUTO_INCREMENT PRIMARY KEY,
+    ID_Usuario1 INT NOT NULL,
+    ID_Usuario2 INT NOT NULL,
+    Fecha_Amistad TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    Estado ENUM('pendiente', 'aceptada', 'rechazada') DEFAULT 'pendiente',
+    Fecha_Estado TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_amistad (LEAST(ID_Usuario1, ID_Usuario2), GREATEST(ID_Usuario1, ID_Usuario2)),
+    FOREIGN KEY (ID_Usuario1) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE,
+    FOREIGN KEY (ID_Usuario2) REFERENCES Usuarios(ID_Usuario) ON DELETE CASCADE,
+    CHECK (ID_Usuario1 != ID_Usuario2)
+);
+
+-- Índices para mejorar el rendimiento de las consultas
 CREATE INDEX idx_personas_nombre_apellido ON Personas(Nombres, Apellidos);
 CREATE INDEX idx_personas_fechas ON Personas(Fecha_Nacimiento, Fecha_Defuncion);
 CREATE INDEX idx_usuarios_email ON Usuarios(Email);
 CREATE INDEX idx_registros_titulo ON Registros_Historicos(Titulo);
 CREATE INDEX idx_registros_tipo_fecha ON Registros_Historicos(Tipo_Documento, Fecha_Documento);
 CREATE INDEX idx_recuerdos_tipo_fecha ON Recuerdos(Tipo_Archivo, Fecha_Subida);
+CREATE INDEX idx_amistades_estado ON Amistades(Estado, Fecha_Estado);
+CREATE INDEX idx_amistades_usuarios ON Amistades(LEAST(ID_Usuario1, ID_Usuario2), GREATEST(ID_Usuario1, ID_Usuario2));
